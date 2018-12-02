@@ -4,6 +4,7 @@ module abp_model_m
 
   type abp_t
      real(kind=rk), allocatable :: x(:,:)
+     real(kind=rk), allocatable :: v(:,:)
      real(kind=rk), allocatable :: theta(:)
      real(kind=rk), allocatable :: force(:,:)
      real(kind=rk), allocatable :: D(:)
@@ -159,10 +160,12 @@ contains
         call this%compute_force
 
         do j = 1, this%N
-           this%x(:,j) = x1(:,j) &
-                + this%D(j)*(force1(:,j)+this%force(:,j))*dt/2 &
-                + this%v0(j) * evec(this%theta(j))*dt &
+           this%v(:,j) = this%D(j)*(force1(:,j)+this%force(:,j))/2 &
+                + this%v0(j) * evec(this%theta(j))
+
+           this%x(:,j) = x1(:,j) + this%v(:,j) * dt &
                 + noise(:,j)*sqrt(this%D(j))
+
         end do
 
      end do
