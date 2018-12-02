@@ -27,6 +27,7 @@ module abp_model_m
      ! constant external force parameter
    contains
      procedure :: init
+     procedure :: random_placement
      procedure :: min_dist
      procedure :: compute_force
      procedure :: srk_step
@@ -61,6 +62,35 @@ contains
     this%box_l_i = 1/L
 
   end subroutine init
+
+  subroutine random_placement(this)
+    class(abp_t), intent(inout) :: this
+
+    integer :: i, j
+    logical :: too_close
+    real(kind=rk) :: dist
+
+    do i = 1, this%N
+       too_close = .true.
+       do while (too_close)
+          call random_number(this%x(:,i))
+          this%x(:,i) = this%x(:,i)*this%box_l
+          too_close = .false.
+          do j = 1, i-1
+             dist = norm2(this%min_dist(this%x(:,i), this%x(:,j)))
+             if (dist <= 0.9_rk*(this%sigma(i)+this%sigma(j))) then
+                too_close = .true.
+                exit
+             end if
+          end do
+       end do
+    end do
+
+  call random_number(this%theta)
+  this%theta = this%theta * 2 * pi
+
+  end subroutine random_placement
+
 
   function min_dist(this, x1, x2) result(r)
     class(abp_t), intent(in) :: this

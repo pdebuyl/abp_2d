@@ -6,12 +6,15 @@ program run_abp_probe
   integer, parameter :: N = 20
 
   type(abp_t) :: abp
-  real(kind=rk), allocatable :: x1(:,:), force1(:,:)
-  real(kind=rk), allocatable :: noise(:,:), theta_noise(:)
 
-  integer :: i, j
-  real(kind=rk) :: dt, dist
-  logical :: too_close
+  integer :: i
+  real(kind=rk) :: dt
+
+  integer :: pos_unit, theta_unit, vel_unit
+
+  open(newunit=pos_unit, file='position.txt')
+  open(newunit=vel_unit, file='velocity.txt')
+  open(newunit=theta_unit, file='theta.txt')
 
   call abp%init(N, L=[16.6_rk, 16.6_rk])
 
@@ -25,29 +28,7 @@ program run_abp_probe
   abp%v0(1) = 0
   abp%sigma(1) = 5
 
-  do i = 1, N
-     too_close = .true.
-     do while (too_close)
-        call random_number(abp%x(:,i))
-        abp%x(:,i) = abp%x(:,i)*abp%box_l
-        too_close = .false.
-        do j = 1, i-1
-           dist = norm2(abp%min_dist(abp%x(:,i), abp%x(:,j)))
-           if (dist <= 0.9_rk*(abp%sigma(i)+abp%sigma(j))) then
-              too_close = .true.
-              exit
-           end if
-        end do
-     end do
-  end do
-
-  call random_number(abp%theta)
-  abp%theta = abp%theta * 2 * pi
-
-  allocate(x1(2, N))
-  allocate(noise(2, N))
-  allocate(theta_noise(N))
-  allocate(force1(2, N))
+  call abp%random_placement()
 
   dt = 0.00001_rk
 
@@ -61,13 +42,11 @@ program run_abp_probe
 
   do i = 1, 5000
 
-     call abp%srk_step(10, dt)
+     call abp%srk_step(500, dt)
 
-     write(22,'(40e15.5)') abp%x
-     write(23,'(20e15.5)') abp%theta
-     write(24,'(40e15.5)') evec(abp%theta)
-
-     write(25,'(40e15.5)') abp%v
+     write(pos_unit,'(40e15.5)') abp%x
+     write(vel_unit,'(40e15.5)') abp%v
+     write(theta_unit,'(20e15.5)') abp%theta
 
   end do
 
