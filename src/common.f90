@@ -1,6 +1,13 @@
 module common
   implicit none
 
+  private
+
+  public :: rk
+  public :: pi
+  public :: normal_distribution
+  public :: normal_value
+
   integer, parameter :: rk = selected_real_kind(15)
 
   real(kind=rk), parameter :: pi = 4*atan(1._rk)
@@ -8,6 +15,11 @@ module common
   ! prng state
   logical :: has_gauss = .false.
   real(kind=rk) :: gauss
+
+  interface normal_distribution
+     module procedure normal_distribution_1
+     module procedure normal_distribution_2
+  end interface normal_distribution
 
 contains
 

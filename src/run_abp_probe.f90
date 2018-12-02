@@ -13,20 +13,10 @@ program run_abp_probe
   real(kind=rk) :: dt, dist
   logical :: too_close
 
-  allocate(abp%x(2, N))
-  allocate(abp%theta(N))
-  allocate(abp%force(2, N))
-  allocate(abp%D(N))
-  allocate(abp%Dr(N))
-  allocate(abp%v0(N))
-  allocate(abp%sigma(N))
-  allocate(abp%epsilon(N))
+  call abp%init(N, L=[16.6_rk, 16.6_rk])
 
-  abp%N = N
-  abp%box_l = 20
-  abp%box_l_i = 1/abp%box_l
-  abp%v0 = 0.2_rk
-  abp%Dr = 0.1_rk
+  abp%v0 = 1._rk
+  abp%Dr = 0.01_rk
   abp%D = 1._rk
   abp%sigma = 1._rk
   abp%epsilon = 1
@@ -71,12 +61,13 @@ program run_abp_probe
 
   do i = 1, 5000
 
-     call abp%srk_step(100, dt)
+     call abp%srk_step(10, dt)
 
      write(22,'(40e15.5)') abp%x
      write(23,'(20e15.5)') abp%theta
      write(24,'(40e15.5)') evec(abp%theta)
 
+     write(25,'(40e15.5)') abp%v
 
   end do
 

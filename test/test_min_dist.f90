@@ -1,4 +1,5 @@
 program test_min_dist
+  use common
   use abp_model_m
   implicit none
 

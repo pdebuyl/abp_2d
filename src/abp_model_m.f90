@@ -2,6 +2,12 @@ module abp_model_m
   use common
   implicit none
 
+  private
+
+  public :: abp_t
+  public :: evec
+  public :: cut_factor
+
   type abp_t
      real(kind=rk), allocatable :: x(:,:)
      real(kind=rk), allocatable :: v(:,:)
@@ -20,15 +26,11 @@ module abp_model_m
      ! trap parameters
      ! constant external force parameter
    contains
+     procedure :: init
      procedure :: min_dist
      procedure :: compute_force
      procedure :: srk_step
   end type abp_t
-
-  interface normal_distribution
-     module procedure normal_distribution_1
-     module procedure normal_distribution_2
-  end interface normal_distribution
 
   interface evec
      module procedure evec_s
@@ -38,6 +40,27 @@ module abp_model_m
   real(kind=rk), parameter :: cut_factor = 2._rk**(1._rk/6._rk)
 
 contains
+
+  subroutine init(this, N, L)
+    class(abp_t), intent(out) :: this
+    integer, intent(in) :: N
+    real(kind=rk), intent(in) :: L(2)
+
+    allocate(this%x(2, N))
+    allocate(this%v(2, N))
+    allocate(this%theta(N))
+    allocate(this%force(2, N))
+    allocate(this%D(N))
+    allocate(this%Dr(N))
+    allocate(this%v0(N))
+    allocate(this%sigma(N))
+    allocate(this%epsilon(N))
+
+    this%N = N
+    this%box_l = L
+    this%box_l_i = 1/L
+
+  end subroutine init
 
   function min_dist(this, x1, x2) result(r)
     class(abp_t), intent(in) :: this
