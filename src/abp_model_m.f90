@@ -8,12 +8,20 @@ module abp_model_m
   public :: evec
   public :: cut_factor
 
+  type pair_list_t
+     real(kind=rk) :: cell_l(2)
+     integer, allocatable :: cell_list(:,:,:)
+     integer, allocatable :: cell_count(:,:)
+  end type pair_list_t
+
   type abp_t
      real(kind=rk), allocatable :: x(:,:)
+     real(kind=rk), allocatable :: x_old(:,:)
      real(kind=rk), allocatable :: v(:,:)
      real(kind=rk), allocatable :: theta(:)
      real(kind=rk), allocatable :: force(:,:)
      real(kind=rk), allocatable :: D(:)
+     real(kind=rk), allocatable :: mu(:)
      real(kind=rk), allocatable :: Dr(:)
      real(kind=rk), allocatable :: v0(:)
      real(kind=rk), allocatable :: sigma(:)
@@ -25,12 +33,16 @@ module abp_model_m
      ! wall parameters
      ! trap parameters
      ! constant external force parameter
+     type(pair_list_t) :: pairs
    contains
      procedure :: init
      procedure :: random_placement
      procedure :: min_dist
      procedure :: compute_force
      procedure :: srk_step
+     procedure :: index_from_position
+     procedure :: make_list
+     procedure :: compute_force_list
   end type abp_t
 
   interface evec
@@ -48,10 +60,12 @@ contains
     real(kind=rk), intent(in) :: L(2)
 
     allocate(this%x(2, N))
+    allocate(this%x_old(2, N))
     allocate(this%v(2, N))
     allocate(this%theta(N))
     allocate(this%force(2, N))
     allocate(this%D(N))
+    allocate(this%mu(N))
     allocate(this%Dr(N))
     allocate(this%v0(N))
     allocate(this%sigma(N))
@@ -197,24 +211,26 @@ contains
         call normal_distribution(theta_noise, scale=sqrt(2*dt))
 
         ! compute force at begin of timestep
-        call this%compute_force
+        call this%make_list
+        call this%compute_force_list
         force1 = this%force
 
         ! First update of the coordinates
         do j = 1, this%N
            this%x(:,j) = this%x(:,j) &
-                + this%D(j)*force1(:,j)*dt &
+                + this%mu(j)*force1(:,j)*dt &
                 + this%v0(j) * evec(this%theta(j))*dt &
                 + noise(:,j)*sqrt(this%D(j))
            this%theta(j) = this%theta(j) + theta_noise(j)*sqrt(this%Dr(j))
         end do
 
         ! compute force at end of timestep
-        call this%compute_force
+        call this%make_list
+        call this%compute_force_list
 
         do j = 1, this%N
-           this%v(:,j) = this%D(j)*(force1(:,j)+this%force(:,j))/2 &
-                + this%v0(j) * evec(this%theta(j))
+           this%v(:,j) = this%v0(j) * evec(this%theta(j)) &
+                + this%mu(j)*(force1(:,j)+this%force(:,j))/2
 
            this%x(:,j) = x1(:,j) + this%v(:,j) * dt &
                 + noise(:,j)*sqrt(this%D(j))
@@ -224,5 +240,136 @@ contains
      end do
 
    end subroutine srk_step
+
+   pure function index_from_position(this, i, r_max) result(idx)
+     class(abp_t), intent(in) :: this
+     integer, intent(in) :: i
+     real(kind=rk), intent(in) :: r_max
+
+     integer :: idx(2)
+
+     idx = floor(modulo(this%x(:,i), this%box_l)/this%pairs%cell_l) + 1
+
+   end function index_from_position
+
+   subroutine make_list(this)
+     class(abp_t), intent(inout) :: this
+
+     logical, save :: first = .true.
+
+     integer :: i, c, idx_xy(2)
+     integer :: n_x, n_y
+     integer :: n_max
+     real(kind=rk) :: r_max
+
+    if (first) then
+       r_max = 2*maxval(this%sigma) + 1
+       n_x = floor(this%box_l(1)/r_max)
+       n_y = floor(this%box_l(2)/r_max)
+       this%pairs%cell_l = this%box_l / [n_x, n_y]
+       n_max = int(maxval(this%pairs%cell_l)**2 / (pi*minval(this%sigma)**2))
+       first = .false.
+       allocate(this%pairs%cell_list(n_max, n_y, n_x))
+       allocate(this%pairs%cell_count(n_y, n_x))
+    end if
+
+    n_max = size(this%pairs%cell_list, dim=1)
+
+    this%pairs%cell_count = 0
+    do i = 1, this%N
+       idx_xy = this%index_from_position(i, r_max)
+       c = this%pairs%cell_count(idx_xy(2), idx_xy(1)) + 1
+       if (c > n_max) stop 'exceed n_max in make_list'
+
+       this%pairs%cell_list(c, idx_xy(2), idx_xy(1)) = i
+       this%pairs%cell_count(idx_xy(2), idx_xy(1)) = c
+    end do
+
+    this%x_old = this%x
+
+   end subroutine make_list
+
+  subroutine compute_force_list(this)
+    class(abp_t), intent(inout) :: this
+
+    real(kind=rk) :: dist(2), r, f(2)
+    real(kind=rk) :: sigma, epsilon
+
+    integer :: cell_i, cell_j, idx_1, idx_2, part_1, part_2
+    integer :: ncell_i, ncell_idx(2)
+    integer :: n1, n2
+    integer :: n_x, n_y
+    integer :: stencil(2, 4)
+
+    stencil(1,:) = [-1, 0, 1, -1]
+    stencil(2,:) = [-1, -1, -1, 0]
+
+    n_x = size(this%pairs%cell_count, dim=2)
+    n_y = size(this%pairs%cell_count, dim=1)
+
+    this%force = 0
+
+    do cell_i = 1, n_x
+       do cell_j = 1, n_y
+
+          !self
+          n1 = this%pairs%cell_count(cell_j, cell_i)
+
+          do idx_1 = 1, n1
+             part_1 = this%pairs%cell_list(idx_1, cell_j, cell_i)
+
+             do idx_2 = idx_1 + 1, n1
+
+                part_2 = this%pairs%cell_list(idx_2, cell_j, cell_i)
+
+                dist = this%min_dist(this%x(:,part_1), this%x(:,part_2))
+                sigma = this%sigma(part_1)+this%sigma(part_2)
+                epsilon = 1
+
+                r = norm2(dist)
+                if (r < cut_factor*sigma) then
+                   f = lj_force(dist, r, sigma, epsilon)
+                   this%force(:,part_1) = this%force(:,part_1) + f
+                   this%force(:,part_2) = this%force(:,part_2) - f
+                end if
+
+             end do
+          end do
+
+          ! cell pairs
+          do ncell_i = 1, size(stencil, dim=2)
+             ncell_idx = [cell_i, cell_j] + stencil(:,ncell_i)
+             ncell_idx = modulo(ncell_idx - 1, [n_x, n_y]) + 1
+
+             n2 = this%pairs%cell_count(ncell_idx(2), ncell_idx(1))
+
+             do idx_1 = 1, n1
+                part_1 = this%pairs%cell_list(idx_1, cell_j, cell_i)
+
+                do idx_2 = 1, n2
+
+                   part_2 = this%pairs%cell_list(idx_2, ncell_idx(2), ncell_idx(1))
+
+                   dist = this%min_dist(this%x(:,part_1), this%x(:,part_2))
+                   sigma = this%sigma(part_1)+this%sigma(part_2)
+                   epsilon = 1
+
+                   r = norm2(dist)
+                   if (r < cut_factor*sigma) then
+                      f = lj_force(dist, r, sigma, epsilon)
+                      this%force(:,part_1) = this%force(:,part_1) + f
+                      this%force(:,part_2) = this%force(:,part_2) - f
+                   end if
+
+                end do
+             end do
+
+
+          end do
+       end do
+    end do
+
+  end subroutine compute_force_list
+
 
 end module abp_model_m
