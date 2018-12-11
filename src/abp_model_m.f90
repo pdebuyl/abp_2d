@@ -334,8 +334,9 @@ contains
                 sigma = this%sigma(part_1)+this%sigma(part_2)
                 epsilon = 1
 
-                r = norm2(dist)
-                if (r < cut_factor*sigma) then
+                r = dist(1)**2 + dist(2)**2
+                if (r < (cut_factor*sigma)**2) then
+                   r = sqrt(r)
                    f = lj_force(dist, r, sigma, epsilon)
                    this%force(:,part_1) = this%force(:,part_1) + f
                    this%force(:,part_2) = this%force(:,part_2) - f
@@ -362,8 +363,9 @@ contains
                    sigma = this%sigma(part_1)+this%sigma(part_2)
                    epsilon = 1
 
-                   r = norm2(dist)
-                   if (r < cut_factor*sigma) then
+                   r = dist(1)**2 + dist(2)**2
+                   if (r < (cut_factor*sigma)**2) then
+                      r = sqrt(r)
                       f = lj_force(dist, r, sigma, epsilon)
                       this%force(:,part_1) = this%force(:,part_1) + f
                       this%force(:,part_2) = this%force(:,part_2) - f
