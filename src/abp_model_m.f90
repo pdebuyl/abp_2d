@@ -191,6 +191,7 @@ contains
     logical, save :: first = .true.
     real(kind=rk), allocatable, save :: noise(:,:), theta_noise(:)
     real(kind=rk), allocatable, save :: x1(:,:), force1(:,:)
+    real(kind=rk) :: max_move
 
     integer :: ii, j
 
@@ -202,6 +203,9 @@ contains
        first = .false.
     end if
 
+    this%x_old = this%x
+    max_move = huge(max_move)
+
      do ii = 1, nsteps
         ! Keep original positions for final update
         x1 = this%x
@@ -211,29 +215,33 @@ contains
         call normal_distribution(theta_noise, scale=sqrt(2*dt))
 
         ! compute force at begin of timestep
-        call this%make_list
+        if (max_move > 0.5_rk) call this%make_list
         call this%compute_force_list
         force1 = this%force
 
+        max_move = 0
         ! First update of the coordinates
         do j = 1, this%N
            this%x(:,j) = this%x(:,j) &
                 + this%mu(j)*force1(:,j)*dt &
                 + this%v0(j) * evec(this%theta(j))*dt &
                 + noise(:,j)*sqrt(this%D(j))
+           max_move = max(max_move, norm2(this%x(:,j)-this%x_old(:,j)))
            this%theta(j) = this%theta(j) + theta_noise(j)*sqrt(this%Dr(j))
         end do
 
         ! compute force at end of timestep
-        call this%make_list
+        if (max_move > 0.5_rk) call this%make_list
         call this%compute_force_list
 
+        max_move = 0
         do j = 1, this%N
            this%v(:,j) = this%v0(j) * evec(this%theta(j)) &
                 + this%mu(j)*(force1(:,j)+this%force(:,j))/2
 
            this%x(:,j) = x1(:,j) + this%v(:,j) * dt &
                 + noise(:,j)*sqrt(this%D(j))
+           max_move = max(max_move, norm2(this%x(:,j)-this%x_old(:,j)))
 
         end do
 
@@ -263,7 +271,7 @@ contains
      real(kind=rk) :: r_max
 
     if (first) then
-       r_max = 2*maxval(this%sigma) + 1
+       r_max = (this%sigma(1) + this%sigma(2))*cut_factor + 1
        n_x = floor(this%box_l(1)/r_max)
        n_y = floor(this%box_l(2)/r_max)
        this%pairs%cell_l = this%box_l / [n_x, n_y]
