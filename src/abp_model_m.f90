@@ -308,6 +308,8 @@ contains
     integer :: n1, n2
     integer :: n_x, n_y
     integer :: stencil(2, 4)
+    logical, save :: first = .true.
+    real(kind=rk), allocatable, save :: force(:,:)
 
     stencil(1,:) = [-1, 0, 1, -1]
     stencil(2,:) = [-1, -1, -1, 0]
@@ -315,8 +317,17 @@ contains
     n_x = size(this%pairs%cell_count, dim=2)
     n_y = size(this%pairs%cell_count, dim=1)
 
-    this%force = 0
+    if (first) then
+       allocate(force(2, this%N))
+       first = .false.
+    end if
 
+    force = 0
+
+    !$omp parallel
+    !$omp do private(cell_i, cell_j, n1, idx_1, part_1, idx_2, part_2, &
+    !$omp dist, sigma, epsilon, r, f, ncell_idx, n2) &
+    !$omp reduction(+:force)
     do cell_i = 1, n_x
        do cell_j = 1, n_y
 
@@ -338,8 +349,8 @@ contains
                 if (r < (cut_factor*sigma)**2) then
                    r = sqrt(r)
                    f = lj_force(dist, r, sigma, epsilon)
-                   this%force(:,part_1) = this%force(:,part_1) + f
-                   this%force(:,part_2) = this%force(:,part_2) - f
+                   force(:,part_1) = force(:,part_1) + f
+                   force(:,part_2) = force(:,part_2) - f
                 end if
 
              end do
@@ -367,8 +378,8 @@ contains
                    if (r < (cut_factor*sigma)**2) then
                       r = sqrt(r)
                       f = lj_force(dist, r, sigma, epsilon)
-                      this%force(:,part_1) = this%force(:,part_1) + f
-                      this%force(:,part_2) = this%force(:,part_2) - f
+                      force(:,part_1) = force(:,part_1) + f
+                      force(:,part_2) = force(:,part_2) - f
                    end if
 
                 end do
@@ -378,6 +389,10 @@ contains
           end do
        end do
     end do
+    !$omp end do
+    !$omp end parallel
+
+    this%force = force
 
   end subroutine compute_force_list
 
