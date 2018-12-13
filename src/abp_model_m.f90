@@ -415,7 +415,6 @@ contains
        do j = 1, n_in_cell
 
           part_2 = this%p_list(part_1)%idx(j)
-          write(31,*) part_1, n_in_cell, j, part_2
 
           dist = this%min_dist(this%x(:,part_1), this%x(:,part_2))
           sigma = this%sigma(part_1)+this%sigma(part_2)
