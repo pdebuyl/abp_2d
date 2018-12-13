@@ -11,7 +11,6 @@ program run_abp_probe
   real(kind=rk) :: dt
 
   integer :: pos_unit, theta_unit, vel_unit
-  character(len=100) :: tmp
   character(len=:), allocatable :: coord_format, theta_format
   real(kind=rk) :: phi, sigma_abp, sigma_probe, l
 
