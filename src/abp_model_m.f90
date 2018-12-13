@@ -14,6 +14,11 @@ module abp_model_m
      integer, allocatable :: cell_count(:,:)
   end type pair_list_t
 
+  type p_list_t
+     integer :: count
+     integer, allocatable :: idx(:)
+  end type p_list_t
+
   type abp_t
      real(kind=rk), allocatable :: x(:,:)
      real(kind=rk), allocatable :: x_old(:,:)
@@ -34,6 +39,8 @@ module abp_model_m
      ! trap parameters
      ! constant external force parameter
      type(pair_list_t) :: pairs
+     type(p_list_t), allocatable :: p_list(:)
+     integer :: p_list_max
    contains
      procedure :: init
      procedure :: random_placement
@@ -51,6 +58,7 @@ module abp_model_m
   end interface evec
 
   real(kind=rk), parameter :: cut_factor = 2._rk**(1._rk/6._rk)
+  real(kind=rk), parameter :: skin = 1
 
 contains
 
@@ -268,7 +276,13 @@ contains
      integer :: i, c, idx_xy(2)
      integer :: n_x, n_y
      integer :: n_max
-     real(kind=rk) :: r_max
+     real(kind=rk) :: r_max, rsq, dist(2), sigma
+     integer :: stencil(2, 4)
+     integer :: cell_i, cell_j, n1, n2, part_1, part_2, idx_1, idx_2, count
+     integer :: ncell_idx(2), ncell_i
+
+    stencil(1,:) = [-1, 0, 1, -1]
+    stencil(2,:) = [-1, -1, -1, 0]
 
     if (first) then
        r_max = (this%sigma(1) + this%sigma(2))*cut_factor + 1
@@ -279,6 +293,14 @@ contains
        first = .false.
        allocate(this%pairs%cell_list(n_max, n_y, n_x))
        allocate(this%pairs%cell_count(n_y, n_x))
+       allocate(this%p_list(this%N))
+       this%p_list_max = int(pi*((this%sigma(1) + this%sigma(2))*cut_factor + skin)**2)
+       do i = 1, this%N
+          allocate(this%p_list(i)%idx(this%p_list_max))
+       end do
+    else
+       n_x = size(this%pairs%cell_count, dim=2)
+       n_y = size(this%pairs%cell_count, dim=1)
     end if
 
     n_max = size(this%pairs%cell_list, dim=1)
@@ -293,45 +315,17 @@ contains
        this%pairs%cell_count(idx_xy(2), idx_xy(1)) = c
     end do
 
-    this%x_old = this%x
-
-   end subroutine make_list
-
-  subroutine compute_force_list(this)
-    class(abp_t), intent(inout) :: this
-
-    real(kind=rk) :: dist(2), r, f(2)
-    real(kind=rk) :: sigma, epsilon
-
-    integer :: cell_i, cell_j, idx_1, idx_2, part_1, part_2
-    integer :: ncell_i, ncell_idx(2)
-    integer :: n1, n2
-    integer :: n_x, n_y
-    integer :: stencil(2, 4)
-    logical, save :: first = .true.
-    real(kind=rk), allocatable, save :: force(:,:)
-
-    stencil(1,:) = [-1, 0, 1, -1]
-    stencil(2,:) = [-1, -1, -1, 0]
-
-    n_x = size(this%pairs%cell_count, dim=2)
-    n_y = size(this%pairs%cell_count, dim=1)
-
-    if (first) then
-       allocate(force(2, this%N))
-       first = .false.
-    end if
-
-    force = 0
+    do i = 1, this%N
+       this%p_list(i)%count = 0
+    end do
 
     !$omp parallel
     !$omp do private(cell_i, cell_j, n1, idx_1, part_1, idx_2, part_2, &
-    !$omp dist, sigma, epsilon, r, f, ncell_idx, n2) &
-    !$omp reduction(+:force)
+    !$omp dist, sigma, rsq, ncell_idx, n2, c)
     do cell_i = 1, n_x
        do cell_j = 1, n_y
 
-          !self
+          ! cell self-interaction
           n1 = this%pairs%cell_count(cell_j, cell_i)
 
           do idx_1 = 1, n1
@@ -343,14 +337,14 @@ contains
 
                 dist = this%min_dist(this%x(:,part_1), this%x(:,part_2))
                 sigma = this%sigma(part_1)+this%sigma(part_2)
-                epsilon = 1
 
-                r = dist(1)**2 + dist(2)**2
-                if (r < (cut_factor*sigma)**2) then
-                   r = sqrt(r)
-                   f = lj_force(dist, r, sigma, epsilon)
-                   force(:,part_1) = force(:,part_1) + f
-                   force(:,part_2) = force(:,part_2) - f
+                rsq = dist(1)**2 + dist(2)**2
+                if (rsq < (cut_factor*sigma + skin)**2) then
+                   ! add pair to list of part_1
+                   c = this%p_list(part_1)%count + 1
+                   if (c > this%p_list_max) stop 'count exceeds p_list_max in make_list'
+                   this%p_list(part_1)%idx(c) = part_2
+                   this%p_list(part_1)%count = c
                 end if
 
              end do
@@ -372,14 +366,14 @@ contains
 
                    dist = this%min_dist(this%x(:,part_1), this%x(:,part_2))
                    sigma = this%sigma(part_1)+this%sigma(part_2)
-                   epsilon = 1
 
-                   r = dist(1)**2 + dist(2)**2
-                   if (r < (cut_factor*sigma)**2) then
-                      r = sqrt(r)
-                      f = lj_force(dist, r, sigma, epsilon)
-                      force(:,part_1) = force(:,part_1) + f
-                      force(:,part_2) = force(:,part_2) - f
+                   rsq = dist(1)**2 + dist(2)**2
+                   if (rsq < (cut_factor*sigma + skin)**2) then
+                      ! add pair to list of part_1
+                      c = this%p_list(part_1)%count + 1
+                      if (c > this%p_list_max) stop 'count exceeds p_list_max in make_list'
+                      this%p_list(part_1)%idx(c) = part_2
+                      this%p_list(part_1)%count = c
                    end if
 
                 end do
@@ -391,6 +385,52 @@ contains
     end do
     !$omp end do
     !$omp end parallel
+
+    this%x_old = this%x
+
+   end subroutine make_list
+
+  subroutine compute_force_list(this)
+    class(abp_t), intent(inout) :: this
+
+    real(kind=rk) :: dist(2), r, f(2)
+    real(kind=rk) :: sigma, epsilon
+
+    integer :: part_1, part_2, j
+    integer :: n_in_cell
+
+    logical, save :: first = .true.
+    real(kind=rk), allocatable, save :: force(:,:)
+
+    if (first) then
+       allocate(force(2, this%N))
+       first = .false.
+    end if
+
+    force = 0
+
+    do part_1 = 1, this%N
+       n_in_cell = this%p_list(part_1)%count
+
+       do j = 1, n_in_cell
+
+          part_2 = this%p_list(part_1)%idx(j)
+          write(31,*) part_1, n_in_cell, j, part_2
+
+          dist = this%min_dist(this%x(:,part_1), this%x(:,part_2))
+          sigma = this%sigma(part_1)+this%sigma(part_2)
+          epsilon = 1
+
+          r = dist(1)**2 + dist(2)**2
+          if (r < (cut_factor*sigma)**2) then
+             r = sqrt(r)
+             f = lj_force(dist, r, sigma, epsilon)
+             force(:,part_1) = force(:,part_1) + f
+             force(:,part_2) = force(:,part_2) - f
+          end if
+
+       end do
+    end do
 
     this%force = force
 
