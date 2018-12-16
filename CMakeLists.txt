@@ -7,7 +7,7 @@ set(CMAKE_Fortran_FLAGS "${CMAKE_Fortran_FLAGS} ${OpenMP_Fortran_FLAGS}")
 
 set(CMAKE_Fortran_MODULE_DIRECTORY ${CMAKE_BINARY_DIR}/modules)
 
-add_library(abp_model src/common.f90 src/abp_model_m.f90)
+add_library(abp_model src/config_m.f90 src/common.f90 src/abp_model_m.f90)
 
 add_executable(test_min_dist test/test_min_dist.f90)
 target_link_libraries(test_min_dist abp_model)
