@@ -8,6 +8,7 @@ module common
   public :: normal_distribution
   public :: normal_value
   public :: seed_rng
+  public :: get_character_argument
 
   integer, parameter :: rk = selected_real_kind(15)
 
@@ -100,5 +101,21 @@ contains
     close(f_unit)
 
   end subroutine seed_rng
+
+  !> Return the position-th command-line argument as an integer
+  function get_character_argument(position) result(arg)
+    integer, intent(in) :: position
+    character(len=:), allocatable :: arg
+    character(len=128) :: r
+
+    if (command_argument_count() < position) then
+       stop 'missing argument for parameter file'
+    end if
+
+    call get_command_argument(position, r)
+
+    arg = trim(r)
+
+  end function get_character_argument
 
 end module common
