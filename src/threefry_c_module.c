@@ -4,10 +4,12 @@
 
 int threefry_int32(threefry2x64_ctr_t *ctr, threefry2x64_key_t *key) {
   threefry2x64_ctr_t rand = threefry2x64(*ctr, *key);
+  ctr->v[0]++;
   return rand.v[0];
 }
 
 double threefry_c_double(threefry2x64_ctr_t *ctr, threefry2x64_key_t *key) {
   threefry2x64_ctr_t rand = threefry2x64(*ctr, *key);
+  ctr->v[0]++;
   return rand.v[0]*DOUBLE_MULT;
 }

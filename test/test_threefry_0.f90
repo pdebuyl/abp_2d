@@ -14,7 +14,6 @@ program test_threefry_0
 
   do i = 1, 10
      write(*,*) threefry_int32(rng%c, rng%k)
-     rng%c%c0 = rng%c%c0 + 1
   end do
 
 end program test_threefry_0

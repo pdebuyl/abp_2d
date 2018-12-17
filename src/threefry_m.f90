@@ -16,8 +16,10 @@ module threefry_m
   type threefry_t
      type(threefry_ctr_t) :: c
      type(threefry_key_t) :: k
-     real(kind=rk) :: normal
+     real(kind=rk) :: normal_value
      logical :: has_normal = .false.
+   contains
+     procedure :: random_normal
   end type threefry_t
 
   interface
@@ -37,5 +39,32 @@ module threefry_m
        type(threefry_key_t) :: k
      end function threefry_double
   end interface
+
+contains
+
+  function random_normal(this) result(r)
+    class(threefry_t), intent(inout) :: this
+    real(kind=rk) :: r
+
+    logical :: found
+    real(kind=rk) :: u1, u2, radius
+
+    if ( this%has_normal ) then
+       r = this%normal_value
+       this%has_normal = .false.
+    else
+       found = .false.
+       do while (.not. found)
+          u1 = 2*threefry_double(this%c, this%k) - 1
+          u2 = 2*threefry_double(this%c, this%k) - 1
+          radius = (u1**2+u2**2)
+          if ( ( radius < 1 ) .and. (radius > 0) ) found = .true.
+       end do
+       this%normal_value = u1 * sqrt( -2 * log(radius)/radius )
+       this%has_normal = .true.
+       r = u2 * sqrt( -2 * log(radius)/radius )
+    end if
+
+  end function random_normal
 
 end module threefry_m

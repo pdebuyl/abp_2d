@@ -14,7 +14,6 @@ program test_threefry_1
 
   do i = 1, 10000
      write(*,*) threefry_double(rng%c, rng%k)
-     rng%c%c0 = rng%c%c0 + 1
   end do
 
 end program test_threefry_1
