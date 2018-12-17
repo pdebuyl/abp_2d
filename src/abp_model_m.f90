@@ -1,5 +1,7 @@
 module abp_model_m
   use common
+  use threefry_m
+  use omp_lib
   implicit none
 
   private
@@ -32,6 +34,7 @@ module abp_model_m
      real(kind=rk), allocatable :: sigma(:)
      real(kind=rk), allocatable :: epsilon(:)
      ! maybe a rng state
+     type(threefry_t), allocatable :: rng(:)
      integer :: N
      real(kind=rk) :: box_l(2)
      real(kind=rk) :: box_l_i(2)
@@ -66,6 +69,9 @@ contains
     class(abp_t), intent(out) :: this
     integer, intent(in) :: N
     real(kind=rk), intent(in) :: L(2)
+    integer :: n_threads
+
+    n_threads = omp_get_max_threads()
 
     allocate(this%x(2, N))
     allocate(this%x_old(2, N))
@@ -82,6 +88,8 @@ contains
     this%N = N
     this%box_l = L
     this%box_l_i = 1/L
+
+    allocate(this%rng(n_threads))
 
   end subroutine init
 
@@ -200,8 +208,9 @@ contains
     real(kind=rk), allocatable, save :: noise(:,:), theta_noise(:)
     real(kind=rk), allocatable, save :: x1(:,:), force1(:,:)
     real(kind=rk) :: max_move
+    real(kind=rk) :: scale
 
-    integer :: ii, j
+    integer :: ii, j, thread_id
 
     if (first) then
        allocate(noise(2, this%N))
@@ -213,14 +222,23 @@ contains
 
     this%x_old = this%x
     max_move = huge(max_move)
+    scale = sqrt(2*dt)
 
      do ii = 1, nsteps
         ! Keep original positions for final update
-        x1 = this%x
 
         ! Generate the noise
-        call normal_distribution(noise, scale=sqrt(2*dt))
-        call normal_distribution(theta_noise, scale=sqrt(2*dt))
+        !$omp parallel private(thread_id)
+        thread_id = omp_get_thread_num()+1
+        !$omp do
+        do j = 1, this%N
+           x1(:,j) = this%x(:,j)
+           noise(1, j) = this%rng(thread_id)%random_normal()*scale
+           noise(2, j) = this%rng(thread_id)%random_normal()*scale
+           theta_noise(j) = this%rng(thread_id)%random_normal()*scale
+        end do
+        !$omp end do
+        !$omp end parallel
 
         ! compute force at begin of timestep
         if (max_move > 0.5_rk) call this%make_list

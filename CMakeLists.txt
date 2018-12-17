@@ -11,12 +11,13 @@ include_directories("include")
 
 add_library(abp_model_common src/common.f90)
 
-add_library(abp_model src/config_m.f90  src/abp_model_m.f90)
-target_link_libraries(abp_model abp_model_common)
-
 add_library(threefry_m src/threefry_c_module.c src/threefry_m.f90)
 set_property(TARGET threefry_m PROPERTY C_STANDARD 99)
 target_link_libraries(threefry_m abp_model_common)
+
+add_library(abp_model src/config_m.f90  src/abp_model_m.f90)
+target_link_libraries(abp_model abp_model_common threefry_m)
+
 
 add_executable(test_min_dist test/test_min_dist.f90)
 target_link_libraries(test_min_dist abp_model)

@@ -41,7 +41,7 @@ program run_abp_probe
   open(newunit=vel_unit, file='velocity.txt')
   open(newunit=theta_unit, file='theta.txt')
 
-  call seed_rng
+
 
   call abp%init(N, L=[l, l])
 
