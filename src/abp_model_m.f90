@@ -234,9 +234,10 @@ contains
                 + this%mu(j)*force1(:,j)*dt &
                 + this%v0(j) * evec(this%theta(j))*dt &
                 + noise(:,j)*sqrt(this%D(j))
-           max_move = max(max_move, norm2(this%x(:,j)-this%x_old(:,j)))
+           max_move = max(max_move, sum((this%x(:,j)-this%x_old(:,j))**2))
            this%theta(j) = this%theta(j) + theta_noise(j)*sqrt(this%Dr(j))
         end do
+        max_move = sqrt(max_move)
 
         ! compute force at end of timestep
         if (max_move > 0.5_rk) call this%make_list
@@ -249,9 +250,9 @@ contains
 
            this%x(:,j) = x1(:,j) + this%v(:,j) * dt &
                 + noise(:,j)*sqrt(this%D(j))
-           max_move = max(max_move, norm2(this%x(:,j)-this%x_old(:,j)))
-
+           max_move = max(max_move, sum((this%x(:,j)-this%x_old(:,j))**2))
         end do
+        max_move = sqrt(max_move)
 
      end do
 
