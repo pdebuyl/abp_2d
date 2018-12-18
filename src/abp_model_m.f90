@@ -247,6 +247,7 @@ contains
 
         max_move = 0
         ! First update of the coordinates
+        !$omp parallel do reduction(max:max_move)
         do j = 1, this%N
            this%x(:,j) = this%x(:,j) &
                 + this%mu(j)*force1(:,j)*dt &
@@ -262,6 +263,7 @@ contains
         call this%compute_force_list
 
         max_move = 0
+        !$omp parallel do reduction(max:max_move)
         do j = 1, this%N
            this%v(:,j) = this%v0(j) * evec(this%theta(j)) &
                 + this%mu(j)*(force1(:,j)+this%force(:,j))/2
