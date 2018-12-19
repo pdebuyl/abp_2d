@@ -7,7 +7,6 @@ module common
   public :: pi
   public :: normal_distribution
   public :: normal_value
-  public :: seed_rng
   public :: get_character_argument
 
   integer, parameter :: rk = selected_real_kind(15)
@@ -81,26 +80,6 @@ contains
     end if
 
   end function normal_value
-
-  subroutine seed_rng
-    integer :: i, n, f_unit, error
-    integer, allocatable :: seed_array(:)
-
-    call random_seed(size=n)
-    allocate(seed_array(n))
-
-    open(newunit=f_unit, file='/dev/urandom', status='old', access='stream', iostat=error)
-
-    if (error /= 0) &
-         stop 'error opening /dev/urandom in seed_rng'
-
-    do i = 1, n
-       read(f_unit) seed_array(i)
-    end do
-
-    close(f_unit)
-
-  end subroutine seed_rng
 
   !> Return the position-th command-line argument as an integer
   function get_character_argument(position) result(arg)
