@@ -23,7 +23,7 @@ module threefry_m
   end type threefry_t
 
   interface
-     integer function threefry_int32(c, k) bind(c, name='threefry_int32')
+     integer(kind=c_int) function threefry_int32(c, k) bind(c, name='threefry_int32')
        use, intrinsic :: iso_c_binding
        import threefry_ctr_t, threefry_key_t
        type(threefry_ctr_t) :: c
