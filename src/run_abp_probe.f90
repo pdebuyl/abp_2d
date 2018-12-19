@@ -15,6 +15,9 @@ program run_abp_probe
   integer :: pos_unit, theta_unit, vel_unit
   character(len=:), allocatable :: coord_format, theta_format
   real(kind=rk) :: phi, sigma_abp, sigma_probe, l
+  integer, allocatable :: idx_data(:)
+  real(kind=rk), allocatable :: io_x(:,:), io_v(:,:), io_th(:)
+  integer, allocatable :: io_id(:)
 
   call conf%init(filename=get_character_argument(1))
 
@@ -41,7 +44,11 @@ program run_abp_probe
   open(newunit=vel_unit, file='velocity.txt')
   open(newunit=theta_unit, file='theta.txt')
 
-
+  allocate(idx_data(N))
+  allocate(io_x(2,N))
+  allocate(io_v(2,N))
+  allocate(io_th(N))
+  allocate(io_id(N))
 
   call abp%init(N, L=[l, l])
   do i = 1, size(abp%rng)
@@ -74,7 +81,7 @@ program run_abp_probe
      if (modulo(i, 100)==0) &
           write(*,*) 'thermalization', i
 
-     call abp%srk_step(100, dt/10)
+     call abp%srk_step(n_steps, dt/10)
 
   end do
 
@@ -85,10 +92,28 @@ program run_abp_probe
 
      call abp%srk_step(n_steps, dt)
 
-     write(pos_unit, coord_format) abp%x
-     write(vel_unit, coord_format) abp%v
-     write(theta_unit, theta_format) abp%theta
+     call write_dumps
 
   end do
+
+contains
+
+  subroutine write_dumps
+
+    integer :: i, idx
+
+    do i = 1, N
+       idx = abp%id(i)
+       io_x(:,idx) = abp%x(:,i)
+       io_v(:,idx) = abp%v(:,i)
+       io_th(idx) = abp%theta(i)
+       io_id(idx) = abp%id(i)
+    end do
+
+    write(pos_unit, coord_format) io_x
+    write(vel_unit, coord_format) io_v
+    write(theta_unit, theta_format) io_th
+
+  end subroutine write_dumps
 
 end program run_abp_probe

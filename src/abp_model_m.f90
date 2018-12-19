@@ -22,6 +22,7 @@ module abp_model_m
   end type p_list_t
 
   type abp_t
+     integer, allocatable :: id(:)
      real(kind=rk), allocatable :: x(:,:)
      real(kind=rk), allocatable :: x_old(:,:)
      real(kind=rk), allocatable :: v(:,:)
@@ -69,10 +70,11 @@ contains
     class(abp_t), intent(out) :: this
     integer, intent(in) :: N
     real(kind=rk), intent(in) :: L(2)
-    integer :: n_threads
+    integer :: n_threads, i
 
     n_threads = omp_get_max_threads()
 
+    allocate(this%id(N))
     allocate(this%x(2, N))
     allocate(this%x_old(2, N))
     allocate(this%v(2, N))
@@ -88,6 +90,8 @@ contains
     this%N = N
     this%box_l = L
     this%box_l_i = 1/L
+
+    this%id = [(i, i=1, N)]
 
     allocate(this%rng(n_threads))
 
@@ -220,12 +224,15 @@ contains
        first = .false.
     end if
 
-    this%x_old = this%x
     max_move = huge(max_move)
     scale = sqrt(2*dt)
 
      do ii = 1, nsteps
         ! Keep original positions for final update
+
+        ! compute force at begin of timestep
+        if (max_move > 0.5_rk) call this%make_list(can_sort=.true.)
+        call this%compute_force_list
 
         ! Generate the noise
         !$omp parallel private(thread_id)
@@ -236,14 +243,10 @@ contains
            noise(1, j) = this%rng(thread_id)%random_normal()*scale
            noise(2, j) = this%rng(thread_id)%random_normal()*scale
            theta_noise(j) = this%rng(thread_id)%random_normal()*scale
+           force1(:,j) = this%force(:,j)
         end do
         !$omp end do
         !$omp end parallel
-
-        ! compute force at begin of timestep
-        if (max_move > 0.5_rk) call this%make_list
-        call this%compute_force_list
-        force1 = this%force
 
         max_move = 0
         ! First update of the coordinates
@@ -259,7 +262,7 @@ contains
         max_move = sqrt(max_move)
 
         ! compute force at end of timestep
-        if (max_move > 0.5_rk) call this%make_list
+        if (max_move > 0.5_rk) call this%make_list(can_sort=.false.)
         call this%compute_force_list
 
         max_move = 0
@@ -289,8 +292,9 @@ contains
 
    end function index_from_position
 
-   subroutine make_list(this)
+   subroutine make_list(this, can_sort)
      class(abp_t), intent(inout) :: this
+     logical, intent(in) :: can_sort
 
      logical, save :: first = .true.
      integer, allocatable, save :: new_idx(:)
@@ -302,7 +306,9 @@ contains
      integer :: stencil(2, 4)
      integer :: cell_i, cell_j, n1, n2, part_1, part_2, idx_1, idx_2, count
      integer :: ncell_idx(2), ncell_i
-     real(kind=rk), allocatable :: tmp_x(:,:), tmp_x_old(:,:), tmp_v(:,:), tmp_theta(:)
+     integer, allocatable, save :: tmp_id(:)
+     real(kind=rk), allocatable, save :: tmp_x(:,:), tmp_x_old(:,:), tmp_v(:,:), tmp_theta(:)
+     real(kind=rk), allocatable, save :: tmp_force(:,:), tmp_D(:), tmp_mu(:), tmp_Dr(:), tmp_v0(:), tmp_sigma(:)
 
     stencil(1,:) = [-1, 0, 1, -1]
     stencil(2,:) = [-1, -1, -1, 0]
@@ -322,10 +328,17 @@ contains
        do i = 1, this%N
           allocate(this%p_list(i)%idx(this%p_list_max))
        end do
+       allocate(tmp_id(this%N))
        allocate(tmp_x(2, this%N))
        allocate(tmp_x_old(2, this%N))
        allocate(tmp_v(2, this%N))
        allocate(tmp_theta(this%N))
+       allocate(tmp_force(2, this%N))
+       allocate(tmp_D(this%N))
+       allocate(tmp_mu(this%N))
+       allocate(tmp_Dr(this%N))
+       allocate(tmp_v0(this%N))
+       allocate(tmp_sigma(this%N))
     else
        n_x = size(this%pairs%cell_count, dim=2)
        n_y = size(this%pairs%cell_count, dim=1)
@@ -343,30 +356,42 @@ contains
        this%pairs%cell_count(idx_xy(2), idx_xy(1)) = c
     end do
 
+    if (can_sort) then
     idx_1 = 1
     do cell_i = 1, n_x
        do cell_j = 1, n_y
           c = this%pairs%cell_count(cell_j, cell_i)
           do i = 1, c
-             !idx_1 = this%pairs%cell_list(c, cell_j, cell_i)
              new_idx(idx_1) = this%pairs%cell_list(i, cell_j, cell_i)
              idx_1 = idx_1 + 1
           end do
        end do
     end do
 
+    tmp_id = this%id
     tmp_x = this%x
-    tmp_x_old = this%x_old
     tmp_v = this%v
     tmp_theta = this%theta
+    tmp_force = this%force
+    tmp_D = this%D
+    tmp_mu = this%mu
+    tmp_Dr = this%Dr
+    tmp_v0 = this%v0
+    tmp_sigma = this%sigma
 
     do i = 1, this%N
        idx_1 = new_idx(i)
        ! replace idx_1 by i
+       this%id(i) = tmp_id(idx_1)
        this%x(:,i) = tmp_x(:,idx_1)
-       this%x_old(:,i) = tmp_x_old(:,idx_1)
        this%v(:,i) = tmp_v(:,idx_1)
        this%theta(i) = tmp_theta(idx_1)
+       this%force(:,i) = tmp_force(:,idx_1)
+       this%D(i) = tmp_D(idx_1)
+       this%mu(i) = tmp_mu(idx_1)
+       this%Dr(i) = tmp_Dr(idx_1)
+       this%v0(i) = tmp_v0(idx_1)
+       this%sigma(i) = tmp_sigma(idx_1)
     end do
 
     this%pairs%cell_count = 0
@@ -378,6 +403,8 @@ contains
        this%pairs%cell_list(c, idx_xy(2), idx_xy(1)) = i
        this%pairs%cell_count(idx_xy(2), idx_xy(1)) = c
     end do
+
+    end if
 
     do i = 1, this%N
        this%p_list(i)%count = 0
