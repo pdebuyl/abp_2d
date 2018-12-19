@@ -4,13 +4,13 @@ module threefry_m
   implicit none
 
   type, bind(c) :: threefry_ctr_t
-     integer(c_long) :: c0
-     integer(c_long) :: c1
+     integer(c_long) :: c0 = 0
+     integer(c_long) :: c1 = 0
   end type threefry_ctr_t
 
   type, bind(c) :: threefry_key_t
-     integer(c_long) :: c0
-     integer(c_long) :: c1
+     integer(c_long) :: c0 = 0
+     integer(c_long) :: c1 = 0
   end type threefry_key_t
 
   type threefry_t
@@ -20,6 +20,7 @@ module threefry_m
      logical :: has_normal = .false.
    contains
      procedure :: random_normal
+     procedure :: urandom_seed
   end type threefry_t
 
   interface
@@ -66,5 +67,20 @@ contains
     end if
 
   end function random_normal
+
+  subroutine urandom_seed(this)
+    class(threefry_t), intent(inout) :: this
+    integer :: f_unit, error
+
+    open(newunit=f_unit, file='/dev/urandom', status='old', access='stream', iostat=error)
+
+    if (error /= 0) &
+         stop 'error opening /dev/urandom in seed_rng'
+    
+    read(f_unit) this%k%c0
+
+    close(f_unit)
+
+  end subroutine urandom_seed
 
 end module threefry_m
