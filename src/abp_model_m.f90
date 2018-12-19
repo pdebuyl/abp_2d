@@ -236,18 +236,18 @@ contains
         call this%compute_force_list
 
         ! Generate the noise
-        !$omp parallel private(thread_id, local_rng)
+        !$omp parallel private(thread_id, local_rng, j)
         thread_id = omp_get_thread_num()+1
         local_rng%k%c0 = this%rng(thread_id)%k%c0
         local_rng%k%c1 = this%rng(thread_id)%k%c1
         local_rng%c%c0 = this%rng(thread_id)%c%c0
         local_rng%c%c1 = this%rng(thread_id)%c%c1
-        !$omp do private(local_rng)
+        !$omp do
         do j = 1, this%N
            x1(:,j) = this%x(:,j)
-           noise(1, j) = this%rng(thread_id)%random_normal()*scale
-           noise(2, j) = this%rng(thread_id)%random_normal()*scale
-           theta_noise(j) = this%rng(thread_id)%random_normal()*scale
+           noise(1, j) = local_rng%random_normal()*scale
+           noise(2, j) = local_rng%random_normal()*scale
+           theta_noise(j) = local_rng%random_normal()*scale
            force1(:,j) = this%force(:,j)
         end do
         !$omp end do
