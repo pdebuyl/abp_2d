@@ -293,6 +293,7 @@ contains
      class(abp_t), intent(inout) :: this
 
      logical, save :: first = .true.
+     integer, allocatable, save :: new_idx(:)
 
      integer :: i, c, idx_xy(2)
      integer :: n_x, n_y
@@ -301,6 +302,7 @@ contains
      integer :: stencil(2, 4)
      integer :: cell_i, cell_j, n1, n2, part_1, part_2, idx_1, idx_2, count
      integer :: ncell_idx(2), ncell_i
+     real(kind=rk), allocatable :: tmp_x(:,:), tmp_x_old(:,:), tmp_v(:,:), tmp_theta(:)
 
     stencil(1,:) = [-1, 0, 1, -1]
     stencil(2,:) = [-1, -1, -1, 0]
@@ -315,16 +317,57 @@ contains
        allocate(this%pairs%cell_list(n_max, n_y, n_x))
        allocate(this%pairs%cell_count(n_y, n_x))
        allocate(this%p_list(this%N))
+       allocate(new_idx(this%N))
        this%p_list_max = int(pi*((this%sigma(1) + this%sigma(2))*cut_factor + skin)**2)
        do i = 1, this%N
           allocate(this%p_list(i)%idx(this%p_list_max))
        end do
+       allocate(tmp_x(2, this%N))
+       allocate(tmp_x_old(2, this%N))
+       allocate(tmp_v(2, this%N))
+       allocate(tmp_theta(this%N))
     else
        n_x = size(this%pairs%cell_count, dim=2)
        n_y = size(this%pairs%cell_count, dim=1)
     end if
 
     n_max = size(this%pairs%cell_list, dim=1)
+
+    this%pairs%cell_count = 0
+    do i = 1, this%N
+       idx_xy = this%index_from_position(i, r_max)
+       c = this%pairs%cell_count(idx_xy(2), idx_xy(1)) + 1
+       if (c > n_max) stop 'exceed n_max in make_list'
+
+       this%pairs%cell_list(c, idx_xy(2), idx_xy(1)) = i
+       this%pairs%cell_count(idx_xy(2), idx_xy(1)) = c
+    end do
+
+    idx_1 = 1
+    do cell_i = 1, n_x
+       do cell_j = 1, n_y
+          c = this%pairs%cell_count(cell_j, cell_i)
+          do i = 1, c
+             !idx_1 = this%pairs%cell_list(c, cell_j, cell_i)
+             new_idx(idx_1) = this%pairs%cell_list(i, cell_j, cell_i)
+             idx_1 = idx_1 + 1
+          end do
+       end do
+    end do
+
+    tmp_x = this%x
+    tmp_x_old = this%x_old
+    tmp_v = this%v
+    tmp_theta = this%theta
+
+    do i = 1, this%N
+       idx_1 = new_idx(i)
+       ! replace idx_1 by i
+       this%x(:,i) = tmp_x(:,idx_1)
+       this%x_old(:,i) = tmp_x_old(:,idx_1)
+       this%v(:,i) = tmp_v(:,idx_1)
+       this%theta(i) = tmp_theta(idx_1)
+    end do
 
     this%pairs%cell_count = 0
     do i = 1, this%N
