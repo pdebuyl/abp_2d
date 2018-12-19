@@ -44,6 +44,9 @@ program run_abp_probe
 
 
   call abp%init(N, L=[l, l])
+  do i = 1, size(abp%rng)
+     call abp%rng(i)%urandom_seed()
+  end do
 
   abp%v0 = conf%get_d('v0')
   abp%Dr = conf%get_d('Dr')
