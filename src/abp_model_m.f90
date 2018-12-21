@@ -242,6 +242,7 @@ contains
         local_rng%k%c1 = this%rng(thread_id)%k%c1
         local_rng%c%c0 = this%rng(thread_id)%c%c0
         local_rng%c%c1 = this%rng(thread_id)%c%c1
+        local_rng%has_normal = .false.
         !$omp do
         do j = 1, this%N
            x1(:,j) = this%x(:,j)
