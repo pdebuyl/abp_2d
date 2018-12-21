@@ -41,6 +41,15 @@ module threefry_m
      end function threefry_double
   end interface
 
+  interface
+     real(c_double) function threefry_c_normal(c, k) bind(c, name='threefry_c_normal')
+       use, intrinsic :: iso_c_binding
+       import threefry_ctr_t, threefry_key_t
+       type(threefry_ctr_t) :: c
+       type(threefry_key_t) :: k
+     end function threefry_c_normal
+  end interface
+
 contains
 
   function random_normal(this) result(r)

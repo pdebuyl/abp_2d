@@ -215,7 +215,8 @@ contains
     real(kind=rk) :: scale
 
     integer :: ii, j, thread_id
-    type(threefry_t) :: local_rng
+    type(threefry_ctr_t) :: local_c
+    type(threefry_key_t) :: local_k
 
     if (first) then
        allocate(noise(2, this%N))
@@ -236,23 +237,22 @@ contains
         call this%compute_force_list
 
         ! Generate the noise
-        !$omp parallel private(thread_id, local_rng, j)
+        !$omp parallel private(thread_id, local_c, local_k, j)
         thread_id = omp_get_thread_num()+1
-        local_rng%k%c0 = this%rng(thread_id)%k%c0
-        local_rng%k%c1 = this%rng(thread_id)%k%c1
-        local_rng%c%c0 = this%rng(thread_id)%c%c0
-        local_rng%c%c1 = this%rng(thread_id)%c%c1
-        local_rng%has_normal = .false.
+        local_c%c0 = this%rng(thread_id)%c%c0
+        local_c%c1 = this%rng(thread_id)%c%c1
+        local_k%c0 = this%rng(thread_id)%k%c0
+        local_k%c1 = this%rng(thread_id)%k%c1
         !$omp do
         do j = 1, this%N
            x1(:,j) = this%x(:,j)
-           noise(1, j) = local_rng%random_normal()*scale
-           noise(2, j) = local_rng%random_normal()*scale
-           theta_noise(j) = local_rng%random_normal()*scale
+           noise(1, j) = threefry_c_normal(local_c, local_k)*scale
+           noise(2, j) = threefry_c_normal(local_c, local_k)*scale
+           theta_noise(j) = threefry_c_normal(local_c, local_k)*scale
            force1(:,j) = this%force(:,j)
         end do
         !$omp end do
-        this%rng(thread_id)%c%c0 = local_rng%c%c0
+        this%rng(thread_id)%c%c0 = local_c%c0
         !$omp end parallel
 
         max_move = 0
