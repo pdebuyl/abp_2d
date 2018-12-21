@@ -24,8 +24,10 @@ double threefry_c_normal(threefry2x64_ctr_t *ctr, threefry2x64_key_t *key) {
   while (flag) {
     rand = threefry2x64(*ctr, *key);
     ctr->v[0]++;
-    u1 = 2*rand.v[0]*DOUBLE_MULT - 1;
-    u2 = 2*rand.v[1]*DOUBLE_MULT - 1;
+    u1 = rand.v[0]*DOUBLE_MULT;
+    u1 = 2*u1 - 1;
+    u2 = rand.v[1]*DOUBLE_MULT;
+    u2 = 2*u2 - 1;
     radius = u1*u1 + u2*u2;
     if (radius > 0 && radius < 1) flag = 0;
   }
