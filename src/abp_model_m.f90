@@ -125,8 +125,7 @@ contains
 
   end subroutine random_placement
 
-
-  function min_dist(this, x1, x2) result(r)
+  pure function min_dist(this, x1, x2) result(r)
     class(abp_t), intent(in) :: this
     real(kind=rk), intent(in) :: x1(2), x2(2)
     real(kind=rk) :: r(2)
