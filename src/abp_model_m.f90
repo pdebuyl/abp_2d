@@ -504,8 +504,13 @@ contains
        first = .false.
     end if
 
-    force = 0
+    !$omp parallel do
+    do j = 1, this%N
+       force(:,j) = 0
+    end do
 
+    !$omp parallel
+    !$omp do reduction(+:force) private(part_1, n_in_cell, j, part_2, dist, sigma, epsilon, r, f)
     do part_1 = 1, this%N
        n_in_cell = this%p_list(part_1)%count
 
@@ -527,8 +532,13 @@ contains
 
        end do
     end do
+    !$omp end do
+    !$omp end parallel
 
-    this%force = force
+    !$omp parallel do
+    do j = 1, this%N
+       this%force(:,j) = force(:,j)
+    end do
 
   end subroutine compute_force_list
 
